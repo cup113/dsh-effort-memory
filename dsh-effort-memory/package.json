@@ -4,6 +4,15 @@
   "description": "Host-only DSH plugin: remember the reasoning effort that was last in effect per (provider, model) and restore it when a session switches back",
   "private": true,
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cup113/dsh-effort-memory.git",
+    "directory": "dsh-effort-memory"
+  },
+  "homepage": "https://github.com/cup113/dsh-effort-memory#readme",
+  "bugs": {
+    "url": "https://github.com/cup113/dsh-effort-memory/issues"
+  },
   "type": "module",
   "main": "./index.js",
   "exports": {
