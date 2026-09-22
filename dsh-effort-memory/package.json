@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Host-only DSH plugin: remember the reasoning effort that was last in effect per (provider, model) and restore it when a session switches back",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "main": "./index.js",
   "exports": {

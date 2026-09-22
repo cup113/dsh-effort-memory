@@ -113,3 +113,7 @@ a confined stdio sandbox.)
 5. A stale remembered level is kept in the domain (harmless): if a model's effort
    table later regains that level, it will be restored again.
 6. Single-process visibility only; `domain/changed` does not cross processes.
+
+## License
+
+[MIT](../LICENSE) © 2026 Jason Li
