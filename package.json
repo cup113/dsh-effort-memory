@@ -6,8 +6,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cup113/dsh-effort-memory.git",
-    "directory": "dsh-effort-memory"
+    "url": "git+https://github.com/cup113/dsh-effort-memory.git"
   },
   "homepage": "https://github.com/cup113/dsh-effort-memory#readme",
   "bugs": {
@@ -19,6 +18,13 @@
     ".": "./index.js",
     "./package.json": "./package.json"
   },
+  "files": [
+    "index.js",
+    "decide.js",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"

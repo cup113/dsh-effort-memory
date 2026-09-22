@@ -12,11 +12,11 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { decide } from '../dsh-effort-memory/decide.js'
+import { decide } from '../decide.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const scratch = join(here, 'mutants')
-const source = readFileSync(join(here, '..', 'dsh-effort-memory', 'decide.js'), 'utf8')
+const source = readFileSync(join(here, '..', 'decide.js'), 'utf8')
 
 const canonical = { changed: true, remembered: 'max', incomingEffort: 'low', efforts: ['off', 'low', 'max'] }
 assert.equal(decide(canonical), 'restore')
