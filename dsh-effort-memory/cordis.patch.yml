@@ -1,0 +1,23 @@
+# The dsh-effort-memory bundle patch: one row, applied when a profile lists
+# this package in its `dsh.profile.bundles`.
+#
+# `dsh plugin --profile <name> add` maintains that list automatically (the
+# reconcile step appends every dependency declaring `dsh.bundle`), so this file
+# is the only wiring an installation needs.
+#
+# Two parity rules, both copied from the shipped out-of-tree example
+# (dsh-custom-reasoning-effort/cordis.patch.yml):
+#   - `name` must be this package's name, so the Loader resolves the row — and
+#     therefore the code it mounts — from the profile's node_modules;
+#   - `id` must equal the `name` the host half exports (`index.js`), so the row
+#     and the plugin are recognizably the same thing.
+#
+# The row must stay a single entry: the include inserts rows verbatim and the
+# Loader rejects a repeated entry id (`duplicate loader entry id`).
+#
+# The plugin publishes no service, so it sits loose in the host root realm — no
+# `isolate` realm and no `config:` block are needed here.
+
+- insert:
+    - id: effort-memory
+      name: dsh-effort-memory

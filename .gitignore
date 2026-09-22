@@ -1,0 +1,13 @@
+# Dependencies (the plugin itself is dependency-free; a profile install
+# creates these beside it)
+node_modules/
+
+# Machine-local, regenerable verification artifacts. `settings.baseline.yaml`
+# is a snapshot of this machine's ~/.dsh/settings.yaml and `composed-tree.txt`
+# the composed profile tree — both are evidence for one verification run, not
+# repository content.
+_verify/settings.baseline.yaml
+_verify/composed-tree.txt
+_verify/mutants/
+
+*.log

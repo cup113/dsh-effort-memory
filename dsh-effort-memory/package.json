@@ -1,0 +1,23 @@
+{
+  "name": "dsh-effort-memory",
+  "version": "0.1.0",
+  "description": "Host-only DSH plugin: remember the reasoning effort that was last in effect per (provider, model) and restore it when a session switches back",
+  "private": true,
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "test": "node test/all.mjs"
+  }
+}
