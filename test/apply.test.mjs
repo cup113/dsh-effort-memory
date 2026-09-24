@@ -66,15 +66,22 @@ function bench({ efforts }) {
     // model-info probe, then the re-issue.
     for (let tick = 0; tick < 6; tick += 1) await new Promise((resolve) => setTimeout(resolve, 0))
   }
-  return { calls, warnings, fire, registrations: listeners.get('session/event')?.length ?? 0 }
+  return {
+    calls,
+    warnings,
+    fire,
+    registrations: listeners.get('session/event')?.length ?? 0,
+    createdRegistrations: listeners.get('session/created')?.length ?? 0,
+  }
 }
 
 /** Warnings other than the expected, once-per-apply, domain-less fallback. */
 const realWarnings = (b) => b.warnings.filter((text) => !/storageDomain is not mounted/.test(text))
 
-test('apply registers exactly one listener and declares its hard dependencies', () => {
+test('apply registers exactly one listener per event and declares its hard dependencies', () => {
   const b = bench({ efforts: {} })
   assert.equal(b.registrations, 1)
+  assert.equal(b.createdRegistrations, 1)
   assert.deepEqual(inject, ['llm', 'sessionController'])
   assert.equal(name, 'effort-memory')
 })
@@ -194,4 +201,93 @@ test('a missing storage domain degrades to memory in this process, with one warn
   assert.equal(b.calls.length, 1)
   assert.equal(b.warnings.length, 1)
   assert.match(b.warnings[0], /storageDomain is not mounted/)
+})
+
+test('the first switch after a restart is restored from the attach-time seed', async () => {
+  const calls = []
+  const listeners = new Map()
+  // Faithful projection fake: stateOf returns whatever the log has already
+  // consumed. The harness sets it to the stored selection before announcing
+  // the session, then to the just-appended pick before dispatching the event —
+  // exactly what the real registry does (eager drive; stateOf materializes at
+  // the session cursor, which includes the event being handled).
+  let projectionState
+  const fake = {
+    llm: {
+      async resolveModelInfo(provider, model) {
+        return { provider, model, reasoning: { efforts: [{ id: 'max', name: 'max' }] } }
+      },
+    },
+    sessionController: {
+      async selectModel(request) {
+        calls.push({ ...request })
+        return {}
+      },
+    },
+    logger: { warn() {}, info() {} },
+    get: (service) => (service === 'sessionProjections' ? { stateOf: () => projectionState } : undefined),
+    on(event, listener) {
+      listeners.set(event, [...(listeners.get(event) ?? []), listener])
+      return () => {}
+    },
+    effect: (callback) => {
+      const disposer = callback()
+      return typeof disposer === 'function' ? disposer : () => {}
+    },
+  }
+  apply(fake)
+  const settle = async () => {
+    for (let tick = 0; tick < 6; tick += 1) await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+  const dispatch = (session, seq, selection) => {
+    projectionState = { lastUsed: null, pending: selection }
+    for (const listener of listeners.get('session/event') ?? []) {
+      listener(session, { type: 'model/selection', seq, time: Date.now(), data: selection })
+    }
+  }
+
+  // Phase 1, before the restart: the user picks max on A in a live session.
+  const live = { id: 's1', firstLiveSeq: 0 }
+  dispatch(live, 1, { ...A, reasoningEffort: 'max' })
+  await settle()
+  assert.deepEqual(calls, [])
+
+  // Phase 2, after the restart: the resumed session is attached — the seed is
+  // read while the projection still shows the stored selection (B, high) —
+  // and the user's very next action switches back to A (a bare pick, no
+  // reasoningEffort carried, so the level in effect would be A's default).
+  const resumed = { id: 's2', firstLiveSeq: 41 }
+  projectionState = { lastUsed: null, pending: { ...B, reasoningEffort: 'high' } }
+  for (const listener of listeners.get('session/created') ?? []) listener(resumed)
+  dispatch(resumed, 42, { ...A })
+  await settle()
+
+  assert.deepEqual(calls, [{ sessionId: 's2', provider: 'p', model: 'a', reasoningEffort: 'max' }])
+})
+
+test('without sessionProjections an attach seeds nothing and the first switch only baselines', async () => {
+  const calls = []
+  const listeners = new Map()
+  const fake = {
+    llm: { async resolveModelInfo() { return { provider: 'p', model: 'a' } } },
+    sessionController: { async selectModel(request) { calls.push(request); return {} } },
+    logger: { warn() {}, info() {} },
+    get: () => undefined,
+    on(event, listener) {
+      listeners.set(event, [...(listeners.get(event) ?? []), listener])
+      return () => {}
+    },
+    effect: (callback) => {
+      const disposer = callback()
+      return typeof disposer === 'function' ? disposer : () => {}
+    },
+  }
+  apply(fake)
+  const session = { id: 's3', firstLiveSeq: 7 }
+  for (const listener of listeners.get('session/created') ?? []) listener(session)
+  for (const listener of listeners.get('session/event') ?? []) {
+    listener(session, { type: 'model/selection', seq: 8, time: Date.now(), data: { ...A, reasoningEffort: 'low' } })
+  }
+  for (let tick = 0; tick < 6; tick += 1) await new Promise((resolve) => setTimeout(resolve, 0))
+  assert.deepEqual(calls, [], 'no projection, no seed: the first event can only baseline')
 })

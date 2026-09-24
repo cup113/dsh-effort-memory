@@ -29,13 +29,20 @@ registers no service, and writes no settings.
      the session's durable selection becomes `{ B, that effort }`;
    - otherwise it does nothing and `B` keeps its own default. This is deliberate:
      a first visit to a never-used model lands on that model's default.
-3. A target model that declares no reasoning capability (resolved `reasoning`
+3. A route change is recognized across a restart too: each session's
+   pre-switch route is seeded from the durable `modelSelection` projection at
+   `session/created` — attach time, while that projection still reflects the
+   stored log alone. Reading the seed from inside the event handler would be
+   vacuous: `stateOf` materializes at the session's current cursor, which
+   already includes the event being handled, so the seed would always equal
+   the event itself.
+4. A target model that declares no reasoning capability (resolved `reasoning`
    missing, or `reasoningEfforts: false` in settings) gets no `reasoningEffort`
    and no error.
-4. A remembered effort the target no longer advertises (for example rewritten by
+5. A remembered effort the target no longer advertises (for example rewritten by
    `dsh-custom-reasoning-effort`) falls back to the model's default silently, with
    no retry.
-5. Effort-only changes on the model already selected are never touched.
+6. Effort-only changes on the model already selected are never touched.
 
 ## Design constraints
 
@@ -51,7 +58,9 @@ registers no service, and writes no settings.
   route — so the event it produces cannot re-enter the rule as a change.
 - **Replay-safe.** Constructor seeds (replay, fork, resume) never publish on the
   `session/event` firehose; a `seq < session.firstLiveSeq` guard is kept as
-  belt-and-braces.
+  belt-and-braces. The pre-switch route of a session not yet seen in this
+  process comes from the attach-time seed above, never from the projection
+  inside an event handler.
 - **No services, no settings, no retries.** Any failure is logged and skipped;
   nothing is ever surfaced to the user.
 - **Zero runtime dependencies.** `defineDomain`/`domainTable` are identity
@@ -111,11 +120,12 @@ inert to the Loader.
 node test/all.mjs
 ```
 
-Twenty assertions: the pure decision table, packaging parity (bundle row id,
+Twenty-two assertions: the pure decision table, packaging parity (bundle row id,
 package name, storage-domain name), and an integration suite that drives the
 real `apply()` against a fake Cordis context — listener shape, event ordering,
-the re-issue loop breaker, replay-seed rejection, and the storage-less fallback.
-[CI](.github/workflows/test.yml) runs the same entry on Node 20 and 22.
+the re-issue loop breaker, replay-seed rejection, the restart seed, and the
+storage-less fallback. [CI](.github/workflows/test.yml) runs the same entry on
+Node 20 and 22.
 
 `node --test` is deliberately not used: it runs each file in a child process with
 piped stdio, which a confined sandbox refuses.
@@ -133,9 +143,9 @@ the `restore` branch removed from `decide.js`, the canonical assertion flips.
 3. The plugin acts on every live session whose route changes, subagent sessions
    included. Restricting to root sessions would require an extra `agents`
    dependency.
-4. Without `sessionProjections`, the first event observed for an existing session
-   can only establish the baseline, so that session's first switch after a restart
-   may not be restored.
+4. Without `sessionProjections` there is no attach-time seed, so a session's
+   first switch after a restart only establishes a baseline and is not
+   restored; every later switch in the same process is.
 5. A stale remembered level is kept in the domain (harmless): if a model's effort
    table later regains that level, it will be restored again.
 6. Single-process visibility only; `domain/changed` does not cross processes.

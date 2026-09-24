@@ -79,6 +79,11 @@ export function outgoing(prev) {
  * request header materialized, and `pending ?? lastUsed` is what the model
  * seat itself renders (`dsh-api-session-controller/lib/index.js:2044-2088`).
  *
+ * The seed must be read before the triggering event is appended — at
+ * `session/created` — because `stateOf` materializes at the session's current
+ * cursor and would otherwise already include that event, making the seed
+ * equal to it (never a route change).
+ *
  * @param {{ lastUsed?: unknown, pending?: unknown } | undefined} state -
  *   projection state, or undefined when the projection is unavailable.
  * @returns {{ route: string, effort?: string } | undefined} the seed, if the

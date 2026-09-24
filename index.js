@@ -13,7 +13,10 @@
  * WHAT it does: it remembers `(provider, model) -> last effort actually in
  * effect` and, when a live session's route changes to a model whose remembered
  * level that model still advertises, re-issues exactly one selection through
- * the public command interface. The durable log stays the single source of
+ * the public command interface. Each session's pre-switch route is seeded at
+ * `session/created` — attach time, while the durable projection still reads
+ * the stored log alone — so a switch is recognized as one even when it is the
+ * first live event after a restart. The durable log stays the single source of
  * truth: this plugin appends nothing itself, rewrites no in-memory selection
  * state, registers no service, and writes no settings.
  *
@@ -202,8 +205,17 @@ function effortIdsOf(info) {
  * Seed one session's tracked route from the durable projection, when the
  * composition serves it.
  *
+ * Timing is load-bearing: this must run while the projection still reflects
+ * the stored log alone — at `session/created`, before any live append.
+ * Reading it from inside a `session/event` handler is vacuous: `stateOf`
+ * materializes the projection at the session's current cursor, which by then
+ * already includes the event being handled (`advanceCell(…,
+ * cursorBefore(session.seq))`, `dsh-session-projection/lib/index.js`), so the
+ * "seed" would equal the event itself and the first switch after a restart
+ * could never register as a route change.
+ *
  * @param {object} ctx - the plugin context.
- * @param {object} session - the live session the event belongs to.
+ * @param {object} session - the session being attached.
  * @returns {{ route: string, effort?: string } | undefined} the seed.
  */
 function seedOf(ctx, session) {
@@ -227,6 +239,23 @@ export function apply(ctx) {
   const sessions = new Map()
   /** Sessions with a restore in flight, so one session never re-issues twice. */
   const inflight = new Set()
+
+  /**
+   * Seed each session at attach time. `session/created` fires exactly once
+   * per entered session — resumed ones included (`prepare` + `enter` +
+   * `announce`, `dsh-session/lib/index.js`) — and always before any live
+   * event can append, so the projection then reads exactly the selection the
+   * user last left that session on. A listener here must never throw: a
+   * rejected `session/created` listener rolls the whole attach back.
+   */
+  ctx.on('session/created', (session) => {
+    try {
+      const seed = seedOf(ctx, session)
+      if (seed !== undefined && !sessions.has(session.id)) sessions.set(session.id, seed)
+    } catch (error) {
+      warn(ctx, `ignored one session/created (${messageOf(error)})`)
+    }
+  })
 
   /**
    * Remember one effort for one route. Called only with the selection that is
@@ -286,11 +315,9 @@ export function apply(ctx) {
       const route = routeKey(provider, model)
       const incomingEffort = effortId(event.data)
 
-      let prev = sessions.get(sid)
-      if (prev === undefined) {
-        prev = seedOf(ctx, session)
-        if (prev !== undefined) sessions.set(sid, prev)
-      }
+      // Seeded at `session/created` (or by an earlier event in this process);
+      // never read from the projection here — see seedOf.
+      const prev = sessions.get(sid)
       const changed = prev !== undefined && prev.route !== route
 
       // Track before any await: a concurrent event for this session must see
